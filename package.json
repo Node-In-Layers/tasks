@@ -1,0 +1,70 @@
+{
+  "name": "@node-in-layers/tasks",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "A Node In Layers Package for creating/running Asynchronous Tasks.",
+  "main": "index.js",
+  "scripts": {
+    "build": "rm -Rf ./dist && tsc -p ./tsconfig.json && cp package.json ./dist && cp README.md ./dist",
+    "build:watch": "nodemon -e '*' --watch ./src --exec npm run build",
+    "commit": "cz",
+    "dist": "npm run build && cd dist && npm publish",
+    "eslint": "eslint .",
+    "prettier": "prettier --write .",
+    "prettier:check": "prettier -c .",
+    "test": "export TS_NODE_PROJECT='./tsconfig.test.json' && mocha -r tsx ./test/src/*.test.ts ./test/src/**/*.test.ts ./test/src/**/**/*.test.ts",
+    "test:coverage": "c8 --all --reporter cobertura --reporter text --reporter lcov --reporter html npm run test",
+    "test:features": "./node_modules/.bin/cucumber-js -p default"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cucumber/cucumber": "11.0.1",
+    "@eslint/compat": "^1.2.0",
+    "@eslint/eslintrc": "^3.1.0",
+    "@eslint/js": "^9.12.0",
+    "@types/chai-as-promised": "^8.0.1",
+    "@types/json-stringify-safe": "^5.0.3",
+    "@types/lodash": "^4.17.13",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.9.0",
+    "@types/proxyquire": "^1.3.31",
+    "@types/sinon": "^17.0.3",
+    "@typescript-eslint/eslint-plugin": "8.13.0",
+    "@typescript-eslint/parser": "8.13.0",
+    "argparse": "^2.0.1",
+    "c8": "^10.1.3",
+    "chai": "^5.1.2",
+    "chai-as-promised": "^8.0.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "9.14.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-import-resolver-typescript": "^3.6.3",
+    "eslint-plugin-functional": "~7.1.0",
+    "eslint-plugin-import": "^2.31.0",
+    "esprima": "^4.0.1",
+    "globals": "^15.12.0",
+    "handlebars": "^4.7.8",
+    "js-yaml": "^4.1.0",
+    "mocha": "^10.8.2",
+    "nodemon": "^3.1.7",
+    "prettier": "^3.3.3",
+    "proxyquire": "^2.1.3",
+    "sinon": "^19.0.2",
+    "sinon-chai": "^4.0.0",
+    "source-map-support": "^0.5.21",
+    "ts-mocha": "^10.0.0",
+    "ts-node": "^10.4.0",
+    "tsx": "^4.19.2",
+    "typescript": "5.3.3"
+  },
+  "dependencies": {
+    "@node-in-layers/core": "^1.2.11",
+    "modern-async": "^2.0.4"
+  }
+}
