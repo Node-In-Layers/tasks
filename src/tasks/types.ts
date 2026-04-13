@@ -7,9 +7,20 @@ import {
   Config,
   ModelCrudsFunctions,
   CrossLayerProps,
+  LogLevelNames,
+  System,
+  NilAnnotatedFunction,
 } from '@node-in-layers/core'
 
+/**
+ * Everything within the repo is under this namespace.
+ */
+export const TasksNamespace = '@node-in-layers/tasks'
+export const InfiniteRetries = -1
 
+/**
+ * Represents the current status of the task.
+ */
 export enum TaskStatus {
   Pending='pending',
   Scheduled='scheduled',
@@ -19,6 +30,9 @@ export enum TaskStatus {
   Cancelled='cancelled'
 }
   
+/**
+ * Level of priority.
+ */
 export enum TaskPriority {
   Low='low',
   Normal='Normal',
@@ -30,7 +44,7 @@ export type TaskRetryConfig = Readonly<{
   /**
    * The number of retries. -1, means infinite retries.
    */
-  maxRetries: number
+  maxRetries: number,
   backoffMultiplier?: number
   initialDelayMs?: number
 }>
@@ -46,6 +60,10 @@ export type TaskCallback = Readonly<{
    */
   id: string
   /**
+   * The task that this callback is for.
+   */
+  taskId: string
+  /**
    * The domain the feature is in.
    */
   domain: string
@@ -60,11 +78,7 @@ export type TaskCallback = Readonly<{
   /**
    * The conditions for running the callback.
    */
-  conditions: {
-    onSuccess?: boolean
-    onFailure?: boolean
-    onAnyCompletion?: boolean
-  }
+  conditions: TaskCallbackConditions
   /**
    * Retry configurations.
    */
@@ -80,8 +94,9 @@ export type TaskCallback = Readonly<{
 /**
  * The standardized response to the calling of a task based function that starts a task.
  */
-export type TaskExecutionResponse = Response<{
+export type TaskExecutionResponse<TOutput extends JsonObj = {}> = Response<{
   taskId: string
+  result?: TOutput
 }>
 
 export type TaskResult<T extends JsonObj={}> = Response<T>
@@ -120,11 +135,8 @@ export type Task<T extends JsonObj={}> = Readonly<{
   startedAt?: string // When task actually started executing
   completedAt?: string // When task finished (success or failure)
   
-  // Callback system
-  callbackIds: ReadonlyArray<string> // What to do when this task completes
-  
   // Execution metadata
-  executionNode?: string // Which worker/node is processing this
+  executionNode?: string
   /**
    * Retry configurations.
    */
@@ -136,22 +148,22 @@ export type Task<T extends JsonObj={}> = Readonly<{
   updatedAt?: string // ISO timestamp
 }>
 
+export type TaskCallbackConditions = Readonly<{
+  onSuccess?: boolean
+  onFailure?: boolean
+  onAnyCompletion?: boolean
+}>
+
 export type CallbackProps = Readonly<{
   domain: string,
   feature: string,
   payload?: Record<string, JsonAble>,
-  conditions: {
-    onSuccess?: boolean
-    onFailure?: boolean
-    onAnyCompletion?: boolean
-  },
+  conditions: TaskCallbackConditions,
   retryConfig?: TaskRetryConfig,
 }>
 
 // Request to create a new task
 export type CreateTaskProps<
-  TInput extends JsonObj={}, 
-  TOutput extends JsonObj={}, 
   TConfig extends ConfigWithTasks=ConfigWithTasks,
   TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
 >= Readonly<{
@@ -168,116 +180,14 @@ export type CreateTaskProps<
   payload?: Record<string, JsonAble>,
   retryConfig?: TaskRetryConfig,
   userId?: string,
+  /**
+   * For internal use only. Don't provide.
+   */
+  _id?: string
 }>
-
-
-
-
-
-
-
-
-// TODO: The following i'm not sure if we need.
-
-
-
-// Event types for the eventing system
-export type TaskEvent = Readonly<{
-  id: string
-  taskId: string
-  eventType: 'created' | 'started' | 'completed' | 'failed' | 'cancelled' | 'scheduled' | 'child_spawned'
-  payload?: Record<string, any>
-  timestamp: string
-  domain: string
-  feature: string
-}>
-
-// Subscription for waiting on task completion
-export type TaskSubscription = Readonly<{
-  id: string
-  taskId: string
-  subscriberDomain: string
-  subscriberFeature: string
-  eventTypes: ReadonlyArray<TaskEvent['eventType']>
-  callbackPayload?: Record<string, any>
-  expiresAt?: string // ISO timestamp - when subscription expires
-  createdAt: string
-}>
-
-// Task query filters for finding tasks
-export type TaskQuery = Readonly<{
-  rootTaskId?: string
-  parentTaskId?: string
-  status?: TaskStatus | ReadonlyArray<TaskStatus>
-  domain?: string
-  feature?: string
-  priority?: TaskPriority
-  createdBy?: string
-  scheduledBefore?: string // ISO timestamp
-  scheduledAfter?: string // ISO timestamp
-  createdBefore?: string // ISO timestamp
-  createdAfter?: string // ISO timestamp
-  includeChildren?: boolean
-  limit?: number
-  offset?: number
-}>
-
-// Task execution context for workers
-export type TaskExecutionContext = Readonly<{
-  task: Task
-  canSpawnChildren: boolean
-  spawnChildTask: (request: CreateTaskProps) => Promise<string> // Returns child task ID
-  getChildTasks: () => Promise<ReadonlyArray<Task>>
-  getRootTask: () => Promise<Task>
-  getParentTask: () => Promise<Task | null>
-}>
-
-// Batch operation for handling multiple tasks
-export type TaskBatchOperation = Readonly<{
-  operationType: 'cancel' | 'retry' | 'update_priority'
-  taskIds: ReadonlyArray<string>
-  parameters?: Record<string, any>
-  requestedBy: string
-  requestedAt: string
-}>
-
-// Task metrics and monitoring
-export type TaskMetrics = Readonly<{
-  domain: string
-  feature?: string
-  timeRange: {
-    start: string // ISO timestamp
-    end: string // ISO timestamp
-  }
-  totalTasks: number
-  completedTasks: number
-  failedTasks: number
-  averageExecutionTimeMs: number
-  averageWaitTimeMs: number // Time from creation to start
-  taskThroughputPerHour: number
-  errorRate: number // Percentage
-  retryRate: number // Percentage
-}>
-
-// Configuration for task system behavior
-export type TaskSystemConfig = Readonly<{
-  domain: string
-  defaultMaxRetries: number
-  defaultPriority: TaskPriority
-  taskTimeoutMs: number
-  callbackTimeoutMs: number
-  maxChildTaskDepth: number
-  enableTaskMetrics: boolean
-  eventRetentionDays: number
-  cleanupCompletedTasksAfterDays: number
-}>
-
-
 
 
 export type RunTaskCallbacksProps<
-  TInput extends JsonObj={}, 
-  TOutput extends JsonObj={}, 
   TConfig extends ConfigWithTasks=ConfigWithTasks,
   TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
 > = Readonly<{
@@ -286,7 +196,6 @@ export type RunTaskCallbacksProps<
 }>
 
 
-export const TasksNamespace = '@node-in-layers/tasks'
 
 export enum TaskRunner {
   Local='local',
@@ -298,14 +207,16 @@ export type LocalTaskConfig = {
   type: TaskRunner.Local,
   command?: string
   runTaskBinPath?: string
+  args?: readonly string[]
 }
 
 export type DockerTaskConfig = {
-  type: TaskRunner.Local,
+  type: TaskRunner.Docker,
   imageName: string
   workingDirectory: string
   command?: string
   runTaskBinPath?: string
+  args?: readonly string[]
 }
 
 /**
@@ -318,15 +229,66 @@ export type CustomTaskConfig = {
   feature: string,
 }
 
+type RedisConfig = Readonly<{
+  host: string
+  port: number
+  password?: string,
+  username?: string,
+  database?: number,
+}>
+
+export enum TaskQueueType {
+  BullMq='bullmq'
+}
+
+export type BullMqTaskQueueConfig = Readonly<{
+  type: TaskQueueType.BullMq,
+  redis: RedisConfig
+}>
+
+export type QueueService = Readonly<{
+  enqueueTask: LayerFunction<(props: { task: Task }) => Promise<Response<void>>>
+  dequeueTask: LayerFunction<(props: { taskId: string }) => Promise<Response<void>>>
+}>
+
+export type TaskQueueConfig = Readonly<{
+  /**
+   * The enqueue/dequeue service domain to use.
+   * This service should support the following functions:
+   * - enqueueTask
+   * - dequeueTask
+   * If not provided, the default (BullMQ/Redis) will be used.
+   * Format: domain.
+   */
+  enqueueService?: string,
+}>
+
+export const NoneType = 'none'
+
+export type CallbackConfig = Readonly<{
+  callbackFailedLogLevel?: LogLevelNames | typeof NoneType
+}>
+
 export type TasksConfig = Readonly<{
-  [TasksNamespace]: LocalTaskConfig | DockerTaskConfig | CustomTaskConfig
+  [TasksNamespace]: {
+    runner: Readonly<{
+      failedTaskLogLevel?: LogLevelNames | typeof NoneType
+    }> & (LocalTaskConfig | DockerTaskConfig | CustomTaskConfig)
+    queue: TaskQueueConfig 
+    bullMq: BullMqTaskQueueConfig
+    callbacks: CallbackConfig
+  }
 }>
 
 export type ConfigWithTasks = TasksConfig & Config
 
-export type TasksServices = Readonly<{
+export type TasksServices = QueueService & Readonly<{
   runTaskLocal: LayerFunction<(task: Task) => Promise<Response<void>>>
   runTaskDocker: LayerFunction<(task: Task) => Promise<Response<void>>>
+  evaluateTaskBySubTasks: LayerFunction<(taskId: string) => Promise<Response<{
+    completed: boolean,
+    status: (TaskStatus.Completed | TaskStatus.Failed | TaskStatus.Cancelled)
+  }>>>
 }>
 
 export type TasksServicesLayer = Readonly<{
@@ -339,27 +301,63 @@ export type TasksServicesLayer = Readonly<{
 }>
 
 export type BaseRunTaskMethod = <
-  TInput extends JsonObj={}, 
-  TOutput extends JsonObj={}, 
   TConfig extends ConfigWithTasks=ConfigWithTasks,
-  TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
->(args: CreateTaskProps<TInput, TOutput, TConfig, TContext>, crossLayerProps?: CrossLayerProps) => Promise<TaskExecutionResponse>
+  TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>,
+  TOutput extends JsonObj={}
+>(args: CreateTaskProps<TConfig, TContext>, crossLayerProps?: CrossLayerProps) => Promise<TaskExecutionResponse<TOutput>>
 
-export type RunTaskMethod = <
-  TInput extends JsonObj={}, 
-  TOutput extends JsonObj={}, 
+export type RunExistingTaskMethod = <
   TConfig extends ConfigWithTasks=ConfigWithTasks,
   TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
 >(context: TContext, task: Task, crossLayerProps?: CrossLayerProps) => Promise<Response<void>>|Response<void>
 
+export type RunTaskMethod = <
+  TConfig extends ConfigWithTasks=ConfigWithTasks,
+  TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
+>(context: TContext, task: Task, crossLayerProps?: CrossLayerProps) => Promise<Response<void>>|Response<void>
+
+export type SubTaskMethod = <T extends JsonObj={}>(name: string, method: LayerFunction<(props: { task: Task, factory: SubTaskMethodFactory }) => Promise<Response<T>>>) => void
+export type SubTaskMethodFactory = {
+  create: SubTaskMethod
+} 
+
+export type TaskFeatureProps<TProps extends JsonObj> = TProps & {
+  tasks?: {
+    executeSync?: boolean
+  }
+}
+
+export type RegisterTaskFeatureProps<
+  TProps extends JsonObj,
+  TOutput extends JsonObj={}
+> = Readonly<{
+  domain?: string,
+  feature?: string,
+  method: (LayerFunction<(props: TProps) => Promise<Response<TOutput>>>) | NilAnnotatedFunction<TProps, TOutput>
+}>
+
+export type RegisterTaskCallbackProps = Readonly<{
+  domain: string,
+  feature: string,
+  method: LayerFunction<(props: { taskCallback: TaskCallback }) => Promise<void>>
+}>
+
 export type TasksFeatures = Readonly<{
   runTask: BaseRunTaskMethod
+  enqueueTask: BaseRunTaskMethod
   runTaskCallbacks: <
-    TInput extends JsonObj={}, 
-    TOutput extends JsonObj={}, 
     TConfig extends ConfigWithTasks=ConfigWithTasks,
     TContext extends FeaturesContext<TConfig>=FeaturesContext<TConfig>
-  >(props: RunTaskCallbacksProps<TInput, TOutput, TConfig, TContext>) => Promise<void>
+  >(props: RunTaskCallbacksProps<TConfig, TContext>) => Promise<void>
+
+  registerTaskFeature: <
+    TProps extends JsonObj,
+    TOutput extends JsonObj={}
+  >(props: RegisterTaskFeatureProps<TProps, TOutput>) => NilAnnotatedFunction<TaskFeatureProps<TProps>, TaskExecutionResponse<TOutput>>
+  registerTaskCallback: (props: RegisterTaskCallbackProps) => LayerFunction<(props: { taskCallbackId: string }) => Promise<void>>
+
+  executeRegisteredTaskFeature: <TOutput extends JsonObj={}>(props: { taskId: string }) => Promise<Response<TOutput>>
+  registerTaskConsumer: () => LayerFunction<(props: { taskId: string }) => Promise<void>>
 }>
 
 export type TasksFeaturesLayer = Readonly<{
@@ -370,3 +368,5 @@ export type TasksFeaturesLayer = Readonly<{
     }
   }
 }>
+
+export type TaskSystem = System<ConfigWithTasks, TasksServicesLayer, TasksFeaturesLayer> & LayerContext<ConfigWithTasks>

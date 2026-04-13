@@ -2,7 +2,7 @@
   "name": "@node-in-layers/tasks",
   "type": "module",
   "version": "1.0.0",
-  "description": "A Node In Layers Package for creating/running Asynchronous Tasks.",
+  "description": "A Node In Layers Package for creating and running Asynchronous Tasks and Workflows.",
   "main": "index.js",
   "scripts": {
     "build": "rm -Rf ./dist && tsc -p ./tsconfig.json && cp package.json ./dist && cp README.md ./dist",
@@ -12,7 +12,7 @@
     "eslint": "eslint .",
     "prettier": "prettier --write .",
     "prettier:check": "prettier -c .",
-    "test": "export TS_NODE_PROJECT='./tsconfig.test.json' && mocha -r tsx ./test/src/*.test.ts ./test/src/**/*.test.ts ./test/src/**/**/*.test.ts",
+    "test": "mocha -r tsx ./test/src/*.test.ts ./test/src/**/*.test.ts ./test/src/**/**/*.test.ts",
     "test:coverage": "c8 --all --reporter cobertura --reporter text --reporter lcov --reporter html npm run test",
     "test:features": "./node_modules/.bin/cucumber-js -p default"
   },
@@ -24,7 +24,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@cucumber/cucumber": "11.0.1",
+    "@cucumber/cucumber": "^12.8.0",
     "@eslint/compat": "^1.2.0",
     "@eslint/eslintrc": "^3.1.0",
     "@eslint/js": "^9.12.0",
@@ -42,7 +42,7 @@
     "chai": "^5.1.2",
     "chai-as-promised": "^8.0.1",
     "cz-conventional-changelog": "^3.3.0",
-    "eslint": "9.14.0",
+    "eslint": "^9.31.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-import-resolver-typescript": "^3.6.3",
     "eslint-plugin-functional": "~7.1.0",
@@ -64,7 +64,10 @@
     "typescript": "5.3.3"
   },
   "dependencies": {
-    "@node-in-layers/core": "^1.2.11",
-    "modern-async": "^2.0.4"
+    "@node-in-layers/core": "^1.15.7",
+    "axios": "^1.15.0",
+    "modern-async": "^2.0.4",
+    "uuid": "^11.1.0",
+    "zod": "^4.3.6"
   }
 }
