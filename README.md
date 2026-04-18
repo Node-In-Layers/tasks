@@ -1,13 +1,68 @@
 # Distributed Tasks and Workflows - The Node In Layers Package for Creating / Running Asynchronous Tasks and Workflows
+
 ![Unit Tests](https://github.com/node-in-layers/tasks/actions/workflows/ut.yml/badge.svg?branch=main)
 [![Coverage Status](https://coveralls.io/repos/github/Node-In-Layers/tasks/badge.svg?branch=try-again)](https://coveralls.io/github/Node-In-Layers/tasks?branch=try-again)
-This repository provides a standardized interface, models, and functional code for running distributed tasks within the Node in Layers framework. It handles complex workflows with hierarchical task spawning, future scheduling, and event-driven callbacks. 
+This repository provides a standardized interface, models, and functional code for running distributed tasks within the Node in Layers framework. It handles complex workflows with hierarchical task spawning, future scheduling, and event-driven callbacks.
+
+All models support @node-in-layer/core's integer and uuid primary keys based on configuration. (Defaults to UUID).
+
+## How To Use
+
+### Install in your project. (Frontend, backend, or your sdk)
+
+```bash
+npm install @node-in-layers/tasks
+```
+
+### Add Domains to your Config
+
+```typescript
+import { CoreNamespace } from '@node-in-layers/core'
+import { AuthNamespace, LoginApproachServiceName } from '@node-in-layers/auth'
+// Front and backend safe import.
+import { tasksCore, TasksNamespace } from '@node-in-layers/tasks'
+// Only for backends.
+import * as tasksBackend from '@node-in-layers/tasks/backend/index.js'
+
+// Only needed for API.
+import { authModelCrudsOverrides } from '@node-in-layers/auth/api/index.js'
+
+const config = {
+  [CoreNamespace.root]: {
+    apps: [
+      // @node-in-layers/data: If you are using a database for a backend, you will want to include this before taskBackend
+
+      // This has all the interfaces, and needs to come before your domains and other @node-in-layers/tasks domains
+      tasksCore,
+      // Only include if this is a backend, otherwise don't include this.
+      tasksBackend,
+
+      // Insert other domains.
+    ],
+    //...
+  },
+  // Optional: For any core based configurations.
+  [TasksNamespace.Core]: {
+    ///...
+  },
+
+  // Optional: For any backend based configurations.
+  [TasksNamespace.Backend]: {
+    ///...
+  },
+}
+```
+
+## Domains
+
+- Core (TasksNamespace.Core) - Defines Types and Models
+- Backend (TasksNamespace.Backend) - Defines backend Task implementation
 
 Tasks are executed at the "feature" level, ensuring all business logic remains decoupled from the distributed queueing infrastructure.
 
 ## Architecture
 
-The `@node-in-layers/tasks` package decouples the *request* to run a feature from its *execution*. This allows features to be executed asynchronously, distributed across multiple workers, and retried automatically.
+The `@node-in-layers/tasks` package decouples the _request_ to run a feature from its _execution_. This allows features to be executed asynchronously, distributed across multiple workers, and retried automatically.
 
 ```mermaid
 flowchart LR
@@ -16,9 +71,9 @@ flowchart LR
         wrapper["Task Wrapper"]
         db[("Database")]
     end
-    
+
     queue[("Queue / Event Bus")]
-    
+
     subgraph Worker["Worker Node"]
         consumer["Queue Consumer"]
         target["Target Feature"]
@@ -28,7 +83,7 @@ flowchart LR
     caller --> wrapper
     wrapper --> db
     wrapper --> queue
-    
+
     queue --> consumer
     consumer --> db
     consumer --> target
@@ -44,7 +99,7 @@ flowchart LR
 4. **Consumption**: A separate long-running Consumer process (typically a CLI application) polls the Queue and dequeues the Task.
 5. **Execution**: The Consumer updates the Task status to `Running`, looks up the registered feature, and executes it with the original payload.
 6. **Completion**: Once the feature finishes, the Consumer updates the Task status to `Completed` (or `Failed`) and saves the result.
-7. **Event Callbacks**: The Consumer triggers the callback lifecycle. It queries the database for any `TaskCallbacks` linked to the task. For each matching callback (based on success/failure conditions), it *enqueues a new Task* for the callback feature. These callbacks act as an event-driven infrastructure.
+7. **Event Callbacks**: The Consumer triggers the callback lifecycle. It queries the database for any `TaskCallbacks` linked to the task. For each matching callback (based on success/failure conditions), it _enqueues a new Task_ for the callback feature. These callbacks act as an event-driven infrastructure.
 
 ```mermaid
 sequenceDiagram
@@ -59,21 +114,21 @@ sequenceDiagram
     Task Wrapper->>Database: Create Task (Pending)
     Task Wrapper->>Queue: Enqueue Task
     Task Wrapper-->>Caller: Return { taskId }
-    
+
     Note over Queue, Consumer: Asynchronous / Distributed
     Queue->>Consumer: Dequeue Task
     Consumer->>Database: Update Task (Running)
     Consumer->>Feature: Execute Feature (payload)
     Feature-->>Consumer: Return Result / Error
     Consumer->>Database: Update Task (Completed/Failed)
-    
+
     Note over Consumer, Queue: Event / Callback Lifecycle
     Consumer->>Database: Fetch TaskCallbacks
     loop For each matching Event/Callback condition
         Consumer->>Database: Create Event Task (Pending)
         Consumer->>Queue: Enqueue Event Task
     end
-    
+
     Note over Queue, Consumer: Event Execution
     Queue->>Consumer: Dequeue Event Task
     Consumer->>Feature: Execute Event Feature

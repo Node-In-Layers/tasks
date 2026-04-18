@@ -22,6 +22,8 @@ export default [
   {
     ignores: [
       'config.*.mjs',
+      'features/',
+      'cucumber.mjs',
       'coverage/',
       'dist/',
       'eslint.config.mjs',

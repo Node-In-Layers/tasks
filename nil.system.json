@@ -1,0 +1,5 @@
+{
+  "name": "@node-in-layers/tasks",
+  "description": "The async operations library for node-in-layer systems.",
+  "isPackage": true
+}

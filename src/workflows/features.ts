@@ -1,15 +1,11 @@
-import { Config, createErrorObject, FeaturesContext } from '@node-in-layers/core/index.js'
-import {
-  WorkflowsServicesLayer,
-  WorkflowsFeaturesLayer
-} from './types.js'
-
+import { Config, FeaturesContext } from '@node-in-layers/core/index.js'
+import { WorkflowsServicesLayer, WorkflowsFeaturesLayer } from './types.js'
 
 const create = (
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  context: FeaturesContext<Config, WorkflowsServicesLayer, WorkflowsFeaturesLayer>
+  _: FeaturesContext<Config, WorkflowsServicesLayer, WorkflowsFeaturesLayer>
 ) => {
-
+  /*
   const _workflows = {}
 
 
@@ -90,10 +86,8 @@ const create = (
   })
 
 
-  return {
-  }
+  */
+  return {}
 }
 
-export {
-  create,
-}
+export { create }
