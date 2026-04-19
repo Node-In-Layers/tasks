@@ -5,6 +5,7 @@ import {
   CrossLayerProps,
   isErrorObject,
   getModel,
+  state,
 } from '@node-in-layers/core'
 import { PrimaryKeyType } from 'functional-models'
 import { TasksNamespace } from '../types.js'
@@ -21,6 +22,19 @@ const DEFAULT_REDIS_PORT = 6379
 const create = (
   context: ServicesContext<ConfigWithTasks, CoreServicesLayer>
 ): TasksServices => {
+  const activeWorkers = state<ReadonlyArray<Worker<Task, any, string>>>([])
+
+  const closeActiveWorkers = () =>
+    Promise.resolve().then(async () => {
+      await Promise.all(
+        activeWorkers
+          .get()
+          .instance()
+          ?.map(worker => worker.close()) ?? []
+      )
+      activeWorkers.set([])
+    })
+
   const _getQueueConnection = () => {
     const config = context.config[TasksNamespace.Backend]
     if (!config) {
@@ -62,14 +76,18 @@ const create = (
           removeOnComplete: true,
           removeOnFail: false,
         })
-        .then(() => undefined)
-        .catch(e =>
-          createErrorObject(
+        .then(async () => {
+          await queue.close()
+          return undefined
+        })
+        .catch(async e => {
+          await queue.close().catch(() => undefined)
+          return createErrorObject(
             'TASK_ENQUEUE_FAILED',
             `Failed to enqueue task ${task.id}`,
             e as Error
           )
-        )
+        })
     })
   }
 
@@ -99,16 +117,17 @@ const create = (
           if (job) {
             await job.remove()
           }
-
+          await queue.close()
           return undefined
         })
-        .catch(e =>
-          createErrorObject(
+        .catch(async e => {
+          await queue.close().catch(() => undefined)
+          return createErrorObject(
             'TASK_DEQUEUE_FAILED',
             `Failed to dequeue task ${props.taskId}`,
             e as Error
           )
-        )
+        })
     })
   }
 
@@ -126,6 +145,7 @@ const create = (
         'startTaskPolling',
         crossLayerProps
       )
+      await closeActiveWorkers()
       const environment = context.constants.environment
       const workers = props.queues.map(queueRegistration => {
         const queueName = createQueueName(
@@ -133,7 +153,7 @@ const create = (
           queueRegistration.domain,
           queueRegistration.feature
         )
-        log.info('Starting worker for queue', {
+        log.debug('Starting worker for queue', {
           queueName,
           domain: queueRegistration.domain,
           feature: queueRegistration.feature,
@@ -148,7 +168,7 @@ const create = (
         )
 
         worker.on('error', error => {
-          log.error(
+          log.debug(
             'Worker error',
             createErrorObject(
               'WORKER_ERROR',
@@ -162,6 +182,16 @@ const create = (
       })
 
       log.info('Task polling started', { workerCount: workers.length })
+      activeWorkers.set(workers)
+      if (props.abortSignal) {
+        props.abortSignal.addEventListener('abort', async () => {
+          await closeActiveWorkers()
+        })
+        if (props.abortSignal.aborted) {
+          await closeActiveWorkers()
+        }
+      }
+
       return undefined
     })
   }

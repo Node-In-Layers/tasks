@@ -1,5 +1,4 @@
 import { JsonObj, JsonAble, PrimaryKeyType } from 'functional-models'
-import { z } from 'zod'
 import {
   AnnotatedFunctionProps,
   Response,
@@ -47,8 +46,6 @@ export type CreateTaskProps<
   _id?: PrimaryKeyType
 }>
 
-export const startTaskPollingPropsSchema = z.object({})
-
 type RedisConfig = Readonly<{
   host: string
   port: number
@@ -74,6 +71,7 @@ export type TaskQueueRegistration = Readonly<{
 export type StartTaskPollingServiceProps = Readonly<{
   queues: readonly TaskQueueRegistration[]
   handler: LayerFunction<(props: { taskId: PrimaryKeyType }) => Promise<void>>
+  abortSignal?: AbortSignal
 }>
 
 export type QueueService = Readonly<{
@@ -144,12 +142,18 @@ export type RegisterTaskCallbackProps = Readonly<{
   method: LayerFunction<(props: { task: Task }) => Promise<void>>
 }>
 
+export type StartTaskPollingFeatureProps = Readonly<{
+  abortSignal?: AbortSignal
+}>
+
 export type TasksFeatures = Readonly<{
   createTaskFeature: CreateTaskFeatureMethod
   registerTaskCallback: LayerFunction<
     (props: RegisterTaskCallbackProps) => void
   >
-  startTaskPolling: NilAnnotatedFunction<JsonObj, void>
+  startTaskPolling: LayerFunction<
+    (props: StartTaskPollingFeatureProps) => Promise<Response<void>>
+  >
   awaitTask: <TResult extends JsonObj = JsonObj>(
     props: {
       taskId: PrimaryKeyType

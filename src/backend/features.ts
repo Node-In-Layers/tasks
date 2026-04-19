@@ -6,7 +6,6 @@ import {
   LayerFunction,
   LogLevelNames,
   isErrorObject,
-  annotatedFunction,
   NilAnnotatedFunction,
 } from '@node-in-layers/core'
 import { asyncMap } from 'modern-async'
@@ -33,8 +32,8 @@ import {
   TasksFeatures,
   NoneType,
   QueueService,
-  startTaskPollingPropsSchema,
   CreateTaskFeatureMethod,
+  StartTaskPollingFeatureProps,
 } from './types.js'
 import { continueUntil } from './utils.js'
 
@@ -430,48 +429,43 @@ const create = (
     }
   }
 
-  const startTaskPolling: TasksFeatures['startTaskPolling'] = annotatedFunction(
-    {
-      functionName: 'startTaskPolling',
-      domain: TasksNamespace.Backend,
-      args: startTaskPollingPropsSchema,
-    },
-    ((_: JsonObj, crossLayerProps?: CrossLayerProps) => {
-      return Promise.resolve().then(async () => {
-        const log = context.log.getInnerLogger(
-          'startTaskPolling',
-          crossLayerProps
-        )
-        const queueService = _getQueueService()
-        if (isErrorObject(queueService)) {
-          return queueService
-        }
+  const startTaskPolling: TasksFeatures['startTaskPolling'] = (
+    props: StartTaskPollingFeatureProps,
+    crossLayerProps?: CrossLayerProps
+  ) => {
+    return Promise.resolve().then(async () => {
+      const log = context.log.getInnerLogger(
+        'startTaskPolling',
+        crossLayerProps
+      )
+      const queueService = _getQueueService()
+      if (isErrorObject(queueService)) {
+        return queueService
+      }
 
-        const queues = Object.keys(taskRunners).flatMap(domain =>
-          Object.keys(taskRunners[domain]).map(feature => ({
-            domain,
-            feature,
-          }))
-        )
+      const queues = Object.keys(taskRunners).flatMap(domain =>
+        Object.keys(taskRunners[domain]).map(feature => ({
+          domain,
+          feature,
+        }))
+      )
 
-        if (queues.length === 0) {
-          log.warn(
-            'startTaskPolling called but no task features are registered'
-          )
-        }
+      if (queues.length === 0) {
+        log.warn('startTaskPolling called but no task features are registered')
+      }
 
-        await queueService.startTaskPolling(
-          {
-            queues,
-            handler: _registerTaskConsumer(),
-          },
-          crossLayerProps
-        )
-        // DO NOT return from startTaskPolling. zod blows up if its anyting other than undefined.
-        return undefined
-      })
-    }) as any
-  )
+      await queueService.startTaskPolling(
+        {
+          queues,
+          handler: _registerTaskConsumer(),
+          abortSignal: props.abortSignal,
+        },
+        crossLayerProps
+      )
+
+      return undefined
+    })
+  }
 
   const awaitTask: TasksFeatures['awaitTask'] = async <
     TResult extends JsonObj = JsonObj,

@@ -4,9 +4,14 @@ import {
   Then,
   setWorldConstructor,
   Before,
+  After,
   BeforeAll,
   AfterAll,
 } from '@cucumber/cucumber'
+import { fileURLToPath } from 'node:url'
+import path from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { DataNamespace } from '@node-in-layers/data'
 import * as dataDomain from '@node-in-layers/data/index.js'
 import {
@@ -22,6 +27,46 @@ import * as backendDomain from '../../src/backend/index.js'
 import { ConfigWithTasks, TaskQueueType } from '../../src/backend/types.js'
 import { z } from 'zod'
 import { assert } from 'chai'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+const composeCwd = path.resolve(__dirname, '..', '..')
+const redisContainerName = 'node-in-layers-tasks-features-redis'
+const execFileAsync = promisify(execFile)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+const composeArgs = (args: readonly string[]) => [
+  'compose',
+  '-f',
+  'docker-compose-features.yml',
+  ...args,
+]
+
+const runDockerCompose = (args: readonly string[]) =>
+  execFileAsync('docker', composeArgs(args), { cwd: composeCwd }).then(
+    () => undefined
+  )
+
+const startRedis = () =>
+  runDockerCompose(['up', '-d']).then(async () => {
+    await sleep(3000)
+  })
+
+const stopRedis = () => runDockerCompose(['down'])
+
+const getRedisLogs = (): Promise<string> =>
+  execFileAsync(
+    'docker',
+    composeArgs(['logs', '--no-color', redisContainerName]),
+    {
+      cwd: composeCwd,
+      maxBuffer: 1024 * 1024,
+    }
+  )
+    .then(({ stdout, stderr }) =>
+      [stdout, stderr].filter(Boolean).join('\n').trim()
+    )
+    .catch(() => '')
 
 // Mock queue implementation
 class MockQueueService {
@@ -125,12 +170,52 @@ const CONFIGS = {
     }
     return config
   },
+  tasksBullMq: () => {
+    const config: CoreConfig & ConfigWithTasks = {
+      systemName: 'nil-tasks-features-bullmq',
+      environment: 'test',
+      [CoreNamespace.root]: {
+        // @ts-ignore
+        apps: [dataDomain, tasksCore, backendDomain],
+        layerOrder: ['services', 'features', 'entries'],
+        logging: {
+          logLevel: LogLevelNames.silent,
+          logFormat: [LogFormat.json],
+        },
+        modelCruds: true,
+        modelFactory: '@node-in-layers/data',
+        noModelLogWrap: true,
+      },
+      [DataNamespace.root]: {
+        databases: {
+          default: {
+            datastoreType: 'memory',
+          },
+        },
+      },
+      [TasksNamespace.Backend]: {
+        queue: {},
+        bullMq: {
+          type: TaskQueueType.BullMq,
+          redis: {
+            host: '127.0.0.1',
+            port: 6380,
+          },
+        },
+        callbacks: {
+          callbackFailedLogLevel: LogLevelNames.warn,
+        },
+      },
+    }
+    return config
+  },
 } as const
 
 class TestWorld {
   system: any | undefined
   configKey: keyof typeof CONFIGS | undefined
   tasksFeatures: any
+  pollerAbortController: AbortController | undefined
   featureFunc: any
   sourceDomain: string | undefined
   sourceFeature: string | undefined
@@ -146,8 +231,25 @@ class TestWorld {
 
 setWorldConstructor(TestWorld)
 
+BeforeAll({ timeout: 30_000 }, async function () {
+  await stopRedis().catch(() => undefined)
+  await startRedis()
+})
+
+AfterAll(async function () {
+  await stopRedis().catch(() => undefined)
+})
+
 Before(function () {
   mockQueueService.reset()
+  this.pollerAbortController = undefined
+})
+
+After(async function () {
+  if (this.pollerAbortController) {
+    this.pollerAbortController.abort()
+    this.pollerAbortController = undefined
+  }
 })
 
 Given('I use the {string} config', function (key: string) {
@@ -184,7 +286,6 @@ Given(
         returns: z.object({ success: z.boolean(), echo: z.string() }),
       },
       async (props: any) => {
-        console.log('EXECUTING FEATURE', domain, feature)
         return { success: true, echo: props.value }
       }
     )
@@ -237,7 +338,10 @@ Then('the task should be added to the queue', async function () {
 })
 
 When('the task poller processes the queue', async function () {
-  await this.tasksFeatures.startTaskPolling({})
+  this.pollerAbortController = new AbortController()
+  await this.tasksFeatures.startTaskPolling({
+    abortSignal: this.pollerAbortController.signal,
+  })
   // Wait for poller to process
   const result = await this.tasksFeatures.awaitTask({
     taskId: this.lastResult.taskId,
@@ -269,7 +373,6 @@ Given(
         returns: z.object({ success: z.boolean(), echo: z.string() }),
       },
       async (props: any) => {
-        console.log('EXECUTING SOURCE FEATURE', domain, feature)
         return { success: true, echo: props.value }
       }
     )
@@ -292,11 +395,6 @@ Given(
       targetFeature: this.targetFeature,
       conditions: { onSuccess: true },
       method: async (props: any) => {
-        console.log(
-          'EXECUTING TARGET CALLBACK',
-          this.targetDomain,
-          this.targetFeature
-        )
         this.callbackExecutedFlag = true
       },
     })
@@ -344,7 +442,10 @@ Then(
 )
 
 When('the child task is processed', async function () {
-  await this.tasksFeatures.startTaskPolling({})
+  this.pollerAbortController = new AbortController()
+  await this.tasksFeatures.startTaskPolling({
+    abortSignal: this.pollerAbortController.signal,
+  })
   const result = await this.tasksFeatures.awaitTask({
     taskId: this.lastChildTask.id,
     timeoutMs: 5000,
@@ -389,7 +490,6 @@ Given(
         args: z.any(), // Accepts the source task payload
       },
       async (props: any) => {
-        console.log('EXECUTING TARGET DB FEATURE', domain, feature)
         this.targetExecutedFlag = true
         return {}
       }

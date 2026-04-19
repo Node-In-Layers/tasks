@@ -1,0 +1,6 @@
+services:
+  node-in-layers-tasks-features-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6380:6379'
