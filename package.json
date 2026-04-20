@@ -1,7 +1,7 @@
 {
   "name": "@node-in-layers/tasks",
   "type": "module",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A Node In Layers Package for creating and running Asynchronous Tasks and Workflows.",
   "main": "index.js",
   "scripts": {
