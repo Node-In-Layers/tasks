@@ -24,7 +24,7 @@ import {
 import { queryBuilder } from 'functional-models'
 import { TasksNamespace, TaskStatus, tasksCore } from '../../src/index.js'
 import * as backendDomain from '../../src/backend/index.js'
-import { ConfigWithTasks, TaskQueueType } from '../../src/backend/types.js'
+import { ConfigWithTasks, TaskQueueType } from '../../src/types.js'
 import { z } from 'zod'
 import { assert } from 'chai'
 

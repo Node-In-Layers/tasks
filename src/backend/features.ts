@@ -23,14 +23,12 @@ import {
   TaskExecutionResponse,
   TaskControlProp,
 } from '../core/types.js'
-import { TasksNamespace } from '../types.js'
+import { TasksNamespace, NoneType, ConfigWithTasks } from '../types.js'
 import { normalizeCreateTaskFeatureArgs } from './internal-libs.js'
 import {
   CreateTaskProps,
-  ConfigWithTasks,
   TasksServicesLayer,
   TasksFeatures,
-  NoneType,
   QueueService,
   CreateTaskFeatureMethod,
   StartTaskPollingFeatureProps,
@@ -225,8 +223,8 @@ const create = (
       )
       if (isErrorObject(enqueueResponse)) {
         const level =
-          context.config[TasksNamespace.Backend].callbacks
-            .callbackFailedLogLevel || LogLevelNames.warn
+          context.config[TasksNamespace.Backend]?.callbacks
+            ?.callbackFailedLogLevel || LogLevelNames.warn
         if (level !== NoneType) {
           log[level](
             'Failed to enqueue callback task',
@@ -305,7 +303,7 @@ const create = (
 
     await _spawnCallbackTasks(finalTask, crossLayerProps)
 
-    return undefined
+    return finalTask
   }
 
   const _createTaskFeatureRunner = <
@@ -348,8 +346,17 @@ const create = (
           payload,
         })
 
-        if (taskControl?.executeNow) {
-          await _executeTask({ taskId: task.id }, crossLayerProps)
+        if (
+          taskControl?.executeNow ||
+          context.config[TasksNamespace.Backend]?.executeNow
+        ) {
+          const result = await _executeTask(
+            { taskId: task.id },
+            crossLayerProps
+          )
+          if (isErrorObject(result)) {
+            return result
+          }
           return {
             taskId: task.id,
           }

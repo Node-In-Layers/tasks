@@ -5,14 +5,13 @@ import {
   FeaturesContext,
   LayerFunction,
   LayerContext,
-  Config,
   CrossLayerProps,
-  LogLevelNames,
   System,
   NilAnnotatedFunction,
   XOR,
 } from '@node-in-layers/core'
 import { TasksNamespace } from '../types.js'
+import type { ConfigWithTasks } from '../types.js'
 import {
   CoreServicesLayer,
   TaskPriority,
@@ -46,23 +45,6 @@ export type CreateTaskProps<
   _id?: PrimaryKeyType
 }>
 
-type RedisConfig = Readonly<{
-  host: string
-  port: number
-  password?: string
-  username?: string
-  database?: number
-}>
-
-export enum TaskQueueType {
-  BullMq = 'bullmq',
-}
-
-export type BullMqTaskQueueConfig = Readonly<{
-  type: TaskQueueType.BullMq
-  redis: RedisConfig
-}>
-
 export type TaskQueueRegistration = Readonly<{
   domain: string
   feature: string
@@ -77,40 +59,12 @@ export type StartTaskPollingServiceProps = Readonly<{
 export type QueueService = Readonly<{
   enqueueTask: LayerFunction<(props: { task: Task }) => Promise<Response<void>>>
   dequeueTask: LayerFunction<
-    (props: { taskId: PrimaryKeyType }) => Promise<Response<void>>
+    (props: { queue: TaskQueueRegistration }) => Promise<Response<Task | void>>
   >
   startTaskPolling: LayerFunction<
     (props: StartTaskPollingServiceProps) => Promise<Response<void>>
   >
 }>
-
-export type TaskQueueConfig = Readonly<{
-  /**
-   * The enqueue/dequeue service domain to use.
-   * This service should support the following functions:
-   * - enqueueTask
-   * - dequeueTask
-   * If not provided, the default (BullMQ/Redis) will be used.
-   * Format: domain.
-   */
-  enqueueService?: string
-}>
-
-export const NoneType = 'none'
-
-export type CallbackConfig = Readonly<{
-  callbackFailedLogLevel?: LogLevelNames | typeof NoneType
-}>
-
-export type TasksConfig = Readonly<{
-  [TasksNamespace.Backend]: {
-    queue: TaskQueueConfig
-    bullMq: BullMqTaskQueueConfig
-    callbacks: CallbackConfig
-  }
-}>
-
-export type ConfigWithTasks = TasksConfig & Config
 
 export type TasksServices = QueueService & Readonly<object>
 

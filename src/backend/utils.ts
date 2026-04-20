@@ -17,11 +17,19 @@ export const continueUntil = async <T>(
 ): Promise<Response<T>> => {
   return Promise.resolve()
     .then(async () => {
-      const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS
-      const pollIntervalMs = options.pollIntervalMs || DEFAULT_POLL_INTERVAL_MS
+      const timeoutMs =
+        options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs
+      const pollIntervalMs =
+        options.pollIntervalMs === undefined
+          ? DEFAULT_POLL_INTERVAL_MS
+          : options.pollIntervalMs
+      const hasTimeout = timeoutMs > 0
+      const derivedMaxPolls = hasTimeout
+        ? Math.ceil(timeoutMs / Math.max(pollIntervalMs, MIN_POLL_INTERVAL_MS))
+        : undefined
       const maxPolls =
-        options.maxPolls ||
-        Math.ceil(timeoutMs / Math.max(pollIntervalMs, MIN_POLL_INTERVAL_MS))
+        options.maxPolls === undefined ? derivedMaxPolls : options.maxPolls
+      const hasMaxPolls = maxPolls !== undefined && maxPolls > 0
 
       // Polling needs mutable state and sequential awaits to compare results over time.
       /* eslint-disable functional/no-let, functional/no-loop-statements, no-await-in-loop */
@@ -29,8 +37,10 @@ export const continueUntil = async <T>(
       const startTime = Date.now()
       let previousResult: T | undefined = undefined
 
-      while (polls < maxPolls) {
-        if (Date.now() - startTime > timeoutMs) {
+      // !hasMaxPolls is intentionally here, for unlimited polling.
+      // eslint-disable-next-line no-unmodified-loop-condition
+      while (!hasMaxPolls || polls < maxPolls) {
+        if (hasTimeout && Date.now() - startTime > timeoutMs) {
           return createErrorObject(
             'TIMEOUT',
             `Operation timed out after ${timeoutMs}ms`
@@ -53,6 +63,13 @@ export const continueUntil = async <T>(
         }
       }
       /* eslint-enable functional/no-let, functional/no-loop-statements, no-await-in-loop */
+
+      if (!hasMaxPolls) {
+        return createErrorObject(
+          'INVALID_POLLING_CONFIGURATION',
+          'continueUntil exited unexpectedly while maxPolls was unlimited.'
+        )
+      }
 
       return createErrorObject(
         'MAX_POLLS_REACHED',

@@ -6,7 +6,7 @@ import {
   JsonAble,
   LastModifiedDateProperty,
 } from 'functional-models'
-import { TasksNamespace } from '../../types.js'
+import { TasksNamespace, ConfigWithTasks } from '../../types.js'
 import {
   Task,
   TaskStatus,
@@ -14,7 +14,6 @@ import {
   TaskRetryConfig,
   TaskResult,
 } from '../types.js'
-import { ConfigWithTasks } from '../../backend/types.js'
 
 export const create = ({
   Model,

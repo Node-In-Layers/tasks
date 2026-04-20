@@ -5,13 +5,12 @@ import {
   ObjectProperty,
 } from 'functional-models'
 import { ModelProps } from '@node-in-layers/core'
-import { TasksNamespace } from '../../types.js'
+import { TasksNamespace, ConfigWithTasks } from '../../types.js'
 import {
   TaskCallbackConditions,
   TaskCallbackMapping,
   TaskRetryConfig,
 } from '../types.js'
-import { ConfigWithTasks } from '../../backend/types.js'
 
 export const create = ({
   Model,

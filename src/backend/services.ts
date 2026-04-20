@@ -4,16 +4,15 @@ import {
   createErrorObject,
   CrossLayerProps,
   isErrorObject,
-  getModel,
   state,
 } from '@node-in-layers/core'
-import { PrimaryKeyType } from 'functional-models'
-import { TasksNamespace } from '../types.js'
+import { TasksNamespace, ConfigWithTasks } from '../types.js'
 import { CoreServicesLayer, Task } from '../core/types.js'
 import {
   TasksServices,
-  ConfigWithTasks,
   StartTaskPollingServiceProps,
+  TaskQueueRegistration,
+  QueueService,
 } from './types.js'
 import { createQueueName } from './libs.js'
 
@@ -44,7 +43,7 @@ const create = (
       )
     }
 
-    const redis = config.bullMq.redis || ({} as any)
+    const redis = config.bullMq?.redis || ({} as any)
     return {
       host: redis.host || '127.0.0.1',
       port: redis.port || DEFAULT_REDIS_PORT,
@@ -91,40 +90,37 @@ const create = (
     })
   }
 
-  const dequeueTask = (props: { taskId: PrimaryKeyType }) => {
+  const dequeueTask: QueueService['dequeueTask'] = (props: {
+    queue: TaskQueueRegistration
+  }) => {
     return Promise.resolve().then(async () => {
-      const TaskModel = getModel<Task>(context, TasksNamespace.Core, 'Tasks')
-      const taskModel = await TaskModel.retrieve(props.taskId)
-      const task = await taskModel?.toObj<Task>()
-      if (!task) {
-        return createErrorObject(
-          'TASK_NOT_FOUND',
-          `Task ${props.taskId} not found.`
-        )
-      }
-
       const connection = _getQueueConnection()
       if (isErrorObject(connection)) {
         return connection
       }
       const environment = context.constants.environment
-      const queueName = createQueueName(environment, task.domain, task.feature)
+      const queueName = createQueueName(
+        environment,
+        props.queue.domain,
+        props.queue.feature
+      )
       const queue = new Queue<Task, any, string>(queueName, { connection })
 
       return queue
-        .getJob(String(props.taskId))
-        .then(async job => {
+        .getJobs()
+        .then(async jobs => {
+          const job = jobs[0]
           if (job) {
             await job.remove()
           }
           await queue.close()
-          return undefined
+          return job.data
         })
         .catch(async e => {
           await queue.close().catch(() => undefined)
           return createErrorObject(
             'TASK_DEQUEUE_FAILED',
-            `Failed to dequeue task ${props.taskId}`,
+            `Failed to dequeue task`,
             e as Error
           )
         })
@@ -181,7 +177,7 @@ const create = (
         return worker
       })
 
-      log.info('Task polling started', { workerCount: workers.length })
+      log.debug('Task polling started', { workerCount: workers.length })
       activeWorkers.set(workers)
       if (props.abortSignal) {
         props.abortSignal.addEventListener('abort', async () => {
