@@ -8,24 +8,20 @@ All models support @node-in-layer/core's integer and uuid primary keys based on 
 
 ## How To Use
 
-### Install in your project. (Frontend, backend, or your sdk)
+### 1. Install in your project. (Frontend, backend, or your sdk)
 
 ```bash
 npm install @node-in-layers/tasks
 ```
 
-### Add Domains to your Config
+### 2. Add Domains to your Config
 
 ```typescript
 import { CoreNamespace } from '@node-in-layers/core'
-import { AuthNamespace, LoginApproachServiceName } from '@node-in-layers/auth'
 // Front and backend safe import.
 import { tasksCore, TasksNamespace } from '@node-in-layers/tasks'
 // Only for backends.
 import * as tasksBackend from '@node-in-layers/tasks/backend/index.js'
-
-// Only needed for API.
-import { authModelCrudsOverrides } from '@node-in-layers/auth/api/index.js'
 
 const config = {
   [CoreNamespace.root]: {
@@ -41,15 +37,106 @@ const config = {
     ],
     //...
   },
-  // Optional: For any core based configurations.
-  [TasksNamespace.Core]: {
-    ///...
-  },
-
   // Optional: For any backend based configurations.
   [TasksNamespace.Backend]: {
     ///...
   },
+}
+```
+
+### 3. Basic Usage
+
+To run a distributed task, you must wrap your feature using `createTaskFeature` from the Tasks Backend feature layer. Because Node In Layers uses closure factories for dependency injection, you do this inside your domain's `features.ts`.
+
+```typescript
+import { FeaturesContext, Config, CrossLayerProps } from '@node-in-layers/core'
+import { TasksNamespace, TasksFeaturesLayer } from '@node-in-layers/tasks'
+import { z } from 'zod'
+
+export const create = (
+  context: FeaturesContext<Config, TasksFeaturesLayer>
+) => {
+  // 1. Wrap your feature
+  const myDistributedFeature = context.features[
+    TasksNamespace.Backend
+  ].createTaskFeature(
+    {
+      domain: 'myDomain',
+      functionName: 'myDistributedFeature',
+      args: z.object({ someData: z.string() }),
+      returns: z.object({ success: z.boolean(), data: z.string() }),
+    },
+    async (props, crossLayerProps) => {
+      const log = context.log.getInnerLogger(
+        'myDistributedFeature',
+        crossLayerProps
+      )
+      log.info('Executing distributed task', { someData: props.someData })
+
+      // Your business logic here
+      return { success: true, data: props.someData }
+    }
+  )
+
+  // 2. Execute and await the task
+  const anotherLongRunningFunction = async (
+    someData: string,
+    crossLayerProps?: CrossLayerProps
+  ) => {
+    // Execute it to get a taskId
+    const response = await myDistributedFeature({ someData }, crossLayerProps)
+
+    if (!response.error) {
+      // Poll for the result on your behalf
+      const result = await context.features[TasksNamespace.Backend].awaitTask(
+        { taskId: response.taskId },
+        crossLayerProps
+      )
+      return result
+    }
+    return response
+  }
+
+  // 3. Or use executeTaskAndWait for sub-tasks
+  const highLevelTaskWithSubTasks = context.features[
+    TasksNamespace.Backend
+  ].createTaskFeature(
+    {
+      domain: 'myDomain',
+      functionName: 'highLevelTaskWithSubTasks',
+      args: z.object({ someData: z.string() }),
+      returns: z.object({ success: z.boolean() }),
+    },
+    async (someData: string, crossLayerProps?: CrossLayerProps) => {
+      const subTaskResults = await context.features[
+        TasksNamespace.Backend
+      ].executeTaskAndWait(
+        {
+          taskFunction: myDistributedFeature,
+          payload: { someData },
+        },
+        crossLayerProps
+      )
+
+      const anotherSubTaskResult = await context.features[
+        TasksNamespace.Backend
+      ].executeTaskAndWait(
+        {
+          taskFunction: context.features.someOtherDomain.myTaskFeature,
+          payload: subTaskResults,
+        },
+        crossLayerProps
+      )
+
+      return { success: true }
+    }
+  )
+
+  return {
+    myDistributedFeature,
+    anotherLongRunningFunction,
+    anotherFunction,
+  }
 }
 ```
 
@@ -137,6 +224,24 @@ sequenceDiagram
 ## Implementations
 
 While the system can be customized to use any implementation, the out-of-the-box implementation uses **BullMQ** for queueing and **Docker** or **Local** for task runners.
+
+### Adding or Changing the Queue Service
+
+BullMQ is provided by default. To change the queue service, you need to provide a domain that has `QueueService` implemented. You then set the configuration correctly to the domain name that the queue service should come from.
+
+```typescript
+import { TasksNamespace } from '@node-in-layers/tasks'
+
+const config = {
+  // ...
+  [TasksNamespace.Backend]: {
+    queue: {
+      // Set this to the domain name that implements QueueService
+      enqueueService: 'myCustomQueueDomain',
+    },
+  },
+}
+```
 
 ### The Consumer Domain
 
