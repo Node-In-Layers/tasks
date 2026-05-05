@@ -17,6 +17,12 @@ import {
 import { createQueueName } from './libs.js'
 
 const DEFAULT_REDIS_PORT = 6379
+const HOURS = 1
+const MINUTES_PER_HOUR = 60
+const SECONDS_PER_MINUTE = 60
+const MILLISECONDS = 1000
+const DEFAULT_BULLMQ_LOCK_DURATION_MS =
+  HOURS * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MILLISECONDS
 
 const create = (
   context: ServicesContext<ConfigWithTasks, CoreServicesLayer>
@@ -53,6 +59,39 @@ const create = (
     }
   }
 
+  const _getBullMqQueueOptions = () => {
+    const config = context.config[TasksNamespace.Backend]
+    return (config?.bullMq?.queueOptions ?? {}) as Record<string, any>
+  }
+
+  const _getBullMqJobOptions = () => {
+    const config = context.config[TasksNamespace.Backend]
+    return (config?.bullMq?.jobOptions ?? {}) as Record<string, any>
+  }
+
+  const _getBullMqWorkerOptions = () => {
+    const config = context.config[TasksNamespace.Backend]
+    const workerOptions = (config?.bullMq?.workerOptions ?? {}) as Record<
+      string,
+      any
+    >
+
+    const lockDurationMsFromConfig = config?.bullMq?.lockDurationMs
+    const lockDurationMs =
+      typeof workerOptions.lockDuration === 'number'
+        ? undefined
+        : typeof lockDurationMsFromConfig === 'number'
+          ? lockDurationMsFromConfig
+          : DEFAULT_BULLMQ_LOCK_DURATION_MS
+
+    return {
+      ...workerOptions,
+      ...(typeof lockDurationMs === 'number'
+        ? { lockDuration: lockDurationMs }
+        : {}),
+    }
+  }
+
   const enqueueTask = (props: { task: Task }) => {
     return Promise.resolve().then(async () => {
       const task = props.task
@@ -62,18 +101,33 @@ const create = (
       }
       const environment = context.constants.environment
       const queueName = createQueueName(environment, task.domain, task.feature)
-      const queue = new Queue<Task, any, string>(queueName, { connection })
+      const queue = new Queue<Task, any, string>(queueName, {
+        ..._getBullMqQueueOptions(),
+        connection,
+      })
 
       const delay = task.scheduledAt
         ? Math.max(0, new Date(task.scheduledAt).getTime() - Date.now())
         : 0
 
+      const jobOptions = _getBullMqJobOptions()
+      const attempts =
+        typeof jobOptions.attempts === 'number' ? jobOptions.attempts : 1
+      const removeOnComplete =
+        jobOptions.removeOnComplete === undefined
+          ? true
+          : jobOptions.removeOnComplete
+      const removeOnFail =
+        jobOptions.removeOnFail === undefined ? false : jobOptions.removeOnFail
+
       return queue
         .add(String(task.id), task, {
+          ...jobOptions,
+          attempts,
           jobId: String(task.id),
           delay,
-          removeOnComplete: true,
-          removeOnFail: false,
+          removeOnComplete,
+          removeOnFail,
         })
         .then(async () => {
           await queue.close()
@@ -104,7 +158,10 @@ const create = (
         props.queue.domain,
         props.queue.feature
       )
-      const queue = new Queue<Task, any, string>(queueName, { connection })
+      const queue = new Queue<Task, any, string>(queueName, {
+        ..._getBullMqQueueOptions(),
+        connection,
+      })
 
       return queue
         .getJobs()
@@ -160,7 +217,10 @@ const create = (
           async job => {
             await props.handler({ taskId: job.data.id }, crossLayerProps)
           },
-          { connection }
+          {
+            ..._getBullMqWorkerOptions(),
+            connection,
+          }
         )
 
         worker.on('error', error => {

@@ -22,6 +22,31 @@ export enum TaskQueueType {
 export type BullMqTaskQueueConfig = Readonly<{
   type: TaskQueueType.BullMq
   redis: RedisConfig
+  /**
+   * Default worker lock duration (ms). If your tasks can run longer than BullMQ's
+   * default lock, increase this to avoid "lock has expired" failures.
+   *
+   * This is applied to BullMQ `Worker` as `lockDuration` unless overridden by
+   * `workerOptions.lockDuration`.
+   */
+  lockDurationMs?: number
+  /**
+   * Passthrough options for BullMQ `Queue` construction (excluding connection).
+   * This is useful for advanced BullMQ tuning without changing code.
+   */
+  queueOptions?: Readonly<Record<string, unknown>>
+  /**
+   * Passthrough options for BullMQ `Worker` construction (excluding connection).
+   * This is useful for advanced BullMQ tuning without changing code.
+   */
+  workerOptions?: Readonly<Record<string, unknown>>
+  /**
+   * Passthrough options for `.add()` calls (job options). Common examples:
+   * `removeOnComplete`, `removeOnFail`, `attempts`, `backoff`, etc.
+   *
+   * NOTE: `jobId` and `delay` are always set by the tasks system.
+   */
+  jobOptions?: Readonly<Record<string, unknown>>
 }>
 
 export type TaskQueueConfig = Readonly<{

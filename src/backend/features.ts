@@ -254,6 +254,14 @@ const create = (
       )
     }
 
+    if (task.status !== TaskStatus.Pending) {
+      log.debug('Skipping task execution because status is not pending', {
+        taskId: task.id,
+        status: task.status,
+      })
+      return task
+    }
+
     const runner = _getTaskRunner(task.domain, task.feature)
     if (!runner) {
       const error = createErrorObject(
