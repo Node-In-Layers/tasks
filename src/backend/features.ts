@@ -34,6 +34,7 @@ import {
   StartTaskPollingFeatureProps,
 } from './types.js'
 import { continueUntil } from './utils.js'
+import { createTaskCrossLayerProps } from './libs.js'
 
 type TaskRunnerMethod = LayerFunction<
   (
@@ -133,6 +134,7 @@ const create = (
         status: TaskStatus.Pending,
         priority: props.taskPriority || TaskPriority.Normal,
         payload: props.payload || {},
+        crossLayerProps: props.crossLayerProps,
         scheduledAt: props.scheduledAt?.toISOString(),
         retryConfig: props.retryConfig,
         userId: props.userId,
@@ -213,6 +215,7 @@ const create = (
         parentTaskId: task.id,
         rootTaskId: task.rootTaskId || task.id,
         payload: task as unknown as JsonObj,
+        crossLayerProps,
         retryConfig: mapping.retryConfig,
         userId: task.userId,
       })
@@ -243,7 +246,6 @@ const create = (
     props: { taskId: PrimaryKeyType },
     crossLayerProps?: CrossLayerProps
   ) => {
-    const log = context.log.getInnerLogger('executeTask', crossLayerProps)
     const task = await context.services[
       TasksNamespace.Core
     ].cruds.Tasks.retrieve(props.taskId).then(x => x?.toObj<Task>())
@@ -253,6 +255,15 @@ const create = (
         `Task ${props.taskId} not found.`
       )
     }
+
+    const taskCrossLayerProps = createTaskCrossLayerProps(
+      task.domain,
+      task.feature,
+      task.id,
+      task.crossLayerProps,
+      crossLayerProps
+    )
+    const log = context.log.getInnerLogger('executeTask', taskCrossLayerProps)
 
     if (task.status !== TaskStatus.Pending) {
       log.debug('Skipping task execution because status is not pending', {
@@ -288,7 +299,7 @@ const create = (
       startedAt: new Date().toISOString(),
     }).then(x => x.toObj<Task>())
 
-    const result = await runner(refreshedTask, crossLayerProps).catch(e => {
+    const result = await runner(refreshedTask, taskCrossLayerProps).catch(e => {
       return createErrorObject(
         'TASK_EXECUTION_EXCEPTION',
         'An overall exception occurred executing a task',
@@ -309,7 +320,7 @@ const create = (
       completedAt: new Date().toISOString(),
     }).then(x => x.toObj<Task>())
 
-    await _spawnCallbackTasks(finalTask, crossLayerProps)
+    await _spawnCallbackTasks(finalTask, taskCrossLayerProps)
 
     return finalTask
   }
@@ -352,6 +363,7 @@ const create = (
           domain,
           feature,
           payload,
+          crossLayerProps,
         })
 
         if (

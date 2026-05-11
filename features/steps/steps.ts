@@ -34,6 +34,10 @@ const composeCwd = path.resolve(__dirname, '..', '..')
 const redisContainerName = 'node-in-layers-tasks-features-redis'
 const execFileAsync = promisify(execFile)
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const getLoggingIdValue = (
+  ids: readonly Record<string, string>[] | undefined,
+  key: string
+) => ids?.find(id => id[key] !== undefined)?.[key]
 
 const composeArgs = (args: readonly string[]) => [
   'compose',
@@ -216,7 +220,10 @@ class TestWorld {
   configKey: keyof typeof CONFIGS | undefined
   tasksFeatures: any
   pollerAbortController: AbortController | undefined
+  pollerPromise: Promise<any> | undefined
   featureFunc: any
+  featureDomain: string | undefined
+  featureName: string | undefined
   sourceDomain: string | undefined
   sourceFeature: string | undefined
   sourceFunc: any
@@ -243,12 +250,17 @@ AfterAll(async function () {
 Before(function () {
   mockQueueService.reset()
   this.pollerAbortController = undefined
+  this.pollerPromise = undefined
 })
 
 After(async function () {
   if (this.pollerAbortController) {
     this.pollerAbortController.abort()
     this.pollerAbortController = undefined
+  }
+  if (this.pollerPromise) {
+    await this.pollerPromise.catch(() => undefined)
+    this.pollerPromise = undefined
   }
 })
 
@@ -278,6 +290,8 @@ Given('I load the system', async function () {
 Given(
   'a task feature is created in the domain {string} with feature {string}',
   async function (domain: string, feature: string) {
+    this.featureDomain = domain
+    this.featureName = feature
     this.featureFunc = this.tasksFeatures.createTaskFeature(
       {
         functionName: feature,
@@ -287,6 +301,29 @@ Given(
       },
       async (props: any) => {
         return { success: true, echo: props.value }
+      }
+    )
+  }
+)
+
+Given(
+  'a task feature is created in the domain {string} with feature {string} that returns cross layer logging ids',
+  async function (domain: string, feature: string) {
+    this.featureDomain = domain
+    this.featureName = feature
+    this.featureFunc = this.tasksFeatures.createTaskFeature(
+      {
+        functionName: feature,
+        domain,
+        args: z.object({ value: z.string() }),
+        returns: z.object({
+          ids: z.array(z.record(z.string(), z.string())),
+        }),
+      },
+      async (props: any, crossLayerProps: any) => {
+        return {
+          ids: crossLayerProps?.logging?.ids || [],
+        }
       }
     )
   }
@@ -351,6 +388,45 @@ When('the task poller processes the queue', async function () {
   assert.isNotOk(result.error)
 })
 
+Given(
+  'the task poller is started with logging id {string} set to {string}',
+  async function (key: string, value: string) {
+    this.pollerAbortController = new AbortController()
+    this.pollerPromise = this.tasksFeatures.startTaskPolling(
+      {
+        abortSignal: this.pollerAbortController.signal,
+      },
+      {
+        logging: {
+          ids: [{ [key]: value }],
+        },
+      }
+    )
+    await sleep(100)
+  }
+)
+
+When(
+  'executeTaskAndWait is called with producer logging id {string} set to {string}',
+  async function (key: string, value: string) {
+    this.lastResult = await this.tasksFeatures.executeTaskAndWait(
+      {
+        taskFunction: this.featureFunc,
+        payload: {
+          value: 'cross-layer-props-value',
+        },
+        timeoutMs: 5000,
+        pollIntervalMs: 100,
+      },
+      {
+        logging: {
+          ids: [{ [key]: value }],
+        },
+      }
+    )
+  }
+)
+
 Then('the task should execute successfully', async function () {
   const task = await this.system.services[
     TasksNamespace.Core
@@ -359,6 +435,43 @@ Then('the task should execute successfully', async function () {
   assert.equal(task.status, TaskStatus.Completed)
   this.lastTask = task
 })
+
+Then('the executeTaskAndWait call should succeed', async function () {
+  assert.isNotOk(this.lastResult.error)
+  assert.isArray(this.lastResult.ids)
+})
+
+Then(
+  'the task result should include logging id {string} set to {string}',
+  async function (key: string, value: string) {
+    const actual = getLoggingIdValue(this.lastResult.ids, key)
+    assert.equal(actual, value)
+  }
+)
+
+Then(
+  'the task result should include the generated task id logging entry',
+  async function () {
+    const tasks = await this.system.services[
+      TasksNamespace.Core
+    ].cruds.Tasks.search(
+      queryBuilder()
+        .property('domain', this.featureDomain)
+        .and()
+        .property('feature', this.featureName)
+        .compile()
+    ).then((res: any) => Promise.all(res.instances.map((x: any) => x.toObj())))
+
+    assert.equal(tasks.length, 1)
+    this.lastTask = tasks[0]
+
+    const idKey = `${this.featureDomain}-${this.featureName}-id`
+    const actual = getLoggingIdValue(this.lastResult.ids, idKey)
+    const expected = String(this.lastTask.id)
+
+    assert.equal(actual, expected)
+  }
+)
 
 Given(
   'a source task feature is created in the domain {string} with feature {string}',

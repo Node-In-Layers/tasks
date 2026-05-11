@@ -1,5 +1,5 @@
 import kebabCase from 'lodash/kebabCase.js'
-import { CrossLayerProps } from '@node-in-layers/core'
+import { CrossLayerProps, combineCrossLayerProps } from '@node-in-layers/core'
 import { PrimaryKeyType } from 'functional-models'
 
 export const createQueueName = (
@@ -14,16 +14,23 @@ export const createTaskCrossLayerProps = (
   domain: string,
   feature: string,
   taskId: PrimaryKeyType,
+  taskCrossLayerProps?: CrossLayerProps,
   crossLayerProps?: CrossLayerProps
 ): CrossLayerProps => {
   const idKey = kebabCase(`${domain}-${feature}-id`)
-  const ids = crossLayerProps?.logging?.ids || []
-
-  return {
-    logging: {
-      ids: ids.concat({
-        [idKey]: String(taskId),
-      }),
-    },
-  }
+  return combineCrossLayerProps(
+    combineCrossLayerProps(
+      {
+        logging: {
+          ids: [
+            {
+              [idKey]: String(taskId),
+            },
+          ],
+        },
+      },
+      taskCrossLayerProps || {}
+    ),
+    crossLayerProps || {}
+  )
 }

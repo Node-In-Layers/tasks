@@ -1,4 +1,4 @@
-import { ModelProps } from '@node-in-layers/core'
+import { CrossLayerProps, ModelProps } from '@node-in-layers/core'
 import {
   TextProperty,
   DatetimeProperty,
@@ -54,6 +54,8 @@ export const create = ({
         choices: Object.values(TaskPriority),
       }),
       payload: ObjectProperty<Record<string, JsonAble>>(),
+      crossLayerProps:
+        ObjectProperty<CrossLayerProps<Record<string, JsonAble>>>(),
       result: ObjectProperty<TaskResult>(),
       scheduledAt: DatetimeProperty(),
       startedAt: DatetimeProperty(),

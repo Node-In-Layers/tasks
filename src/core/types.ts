@@ -1,5 +1,6 @@
 import {
   AnnotatedFunctionProps,
+  CrossLayerProps,
   LayerFunction,
   ModelCrudsFunctions,
   Response,
@@ -132,6 +133,7 @@ export type Task<
   status: TaskStatus
   priority: TaskPriority
   payload: TPayload
+  crossLayerProps?: CrossLayerProps<Record<string, JsonAble>>
   result?: TaskResult<TResult>
   scheduledAt?: string
   startedAt?: string

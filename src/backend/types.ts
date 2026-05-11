@@ -37,6 +37,7 @@ export type CreateTaskProps<
   parentTaskId?: PrimaryKeyType
   taskPriority?: TaskPriority
   payload?: Record<string, JsonAble>
+  crossLayerProps?: CrossLayerProps<Record<string, JsonAble>>
   retryConfig?: TaskRetryConfig
   userId?: string
   /**

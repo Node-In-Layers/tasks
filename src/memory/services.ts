@@ -1,5 +1,6 @@
 import merge from 'lodash/merge.js'
 import {
+  CrossLayerProps,
   ServicesContext,
   State,
   state,
@@ -51,7 +52,10 @@ export const create = (
     })
   }
 
-  const startTaskPolling = (props: StartTaskPollingServiceProps) => {
+  const startTaskPolling = (
+    props: StartTaskPollingServiceProps,
+    crossLayerProps?: CrossLayerProps
+  ) => {
     const keys = props.queues.map(queue => `${queue.domain}.${queue.feature}`)
     return Promise.resolve().then(async () => {
       await continueUntil(
@@ -68,7 +72,7 @@ export const create = (
                   return false
                 }
                 if (task) {
-                  await props.handler({ taskId: task.id })
+                  await props.handler({ taskId: task.id }, crossLayerProps)
                 }
                 return task
               },
