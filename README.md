@@ -25,7 +25,7 @@ import * as tasksBackend from '@node-in-layers/tasks/backend/index.js'
 
 const config = {
   [CoreNamespace.root]: {
-    apps: [
+    domains: [
       // @node-in-layers/data: If you are using a database for a backend, you will want to include this before taskBackend
 
       // This has all the interfaces, and needs to come before your domains and other @node-in-layers/tasks domains
