@@ -133,7 +133,7 @@ const CONFIGS = {
       environment: 'test',
       [CoreNamespace.root]: {
         // @ts-ignore
-        apps: [
+        domains: [
           dataDomain,
           // @ts-ignore
           tasksCore,
@@ -180,7 +180,7 @@ const CONFIGS = {
       environment: 'test',
       [CoreNamespace.root]: {
         // @ts-ignore
-        apps: [dataDomain, tasksCore, backendDomain],
+        domains: [dataDomain, tasksCore, backendDomain],
         layerOrder: ['services', 'features', 'entries'],
         logging: {
           logLevel: LogLevelNames.silent,
