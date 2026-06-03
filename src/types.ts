@@ -79,34 +79,55 @@ export type MemoryTasksConfig = Readonly<{
   queue?: MemoryQueueConfig
 }>
 
+const hoursPerDay = 24
+const minutesPerHour = 60
+const secondsPerMinute = 60
+const defaultTaskTtlDays = 90
+
+export const defaultTaskTtlSeconds =
+  defaultTaskTtlDays * hoursPerDay * minutesPerHour * secondsPerMinute
+
+export const defaultMaxTaskRunningSeconds =
+  hoursPerDay * minutesPerHour * secondsPerMinute
+
+export const defaultCleanupBatchSize = 100
+
 export type CoreTasksConfig = Readonly<{
   /**
-   * Default TTL offset in seconds from task creation time. Applied when `noTTL` is not true
-   * and the task record has no explicit `ttl`. Stored on the task as a Unix timestamp (seconds).
+   * Default TTL offset in seconds from task creation time. Defaults to 90 days.
+   * Applied when `noTTL` is not true and the task record has no explicit `ttl`.
+   * Stored on the task as a Unix timestamp (seconds).
    */
   defaultTtl?: number
   /**
    * When true, task records are created without a TTL even when `defaultTtl` is set.
    */
   noTTL?: boolean
+}>
+
+export type BackendTasksConfig = Readonly<{
   /**
-   * Maximum number of expired task records to fetch and delete per search batch in `cleanUpTasks`.
+   * If true, no task will ever be enqueued. It will always be executed immediately.
+   * This is useful for development / local execution.
+   */
+  executeNow?: boolean
+  queue?: TaskQueueConfig
+  bullMq?: BullMqTaskQueueConfig
+  callbacks?: CallbackConfig
+  /**
+   * Maximum number of task records to fetch and process per search batch in `cleanUpTasks`.
    */
   cleanupBatchSize?: number
+  /**
+   * Maximum running time in seconds before `cleanUpTasks` marks a running task as failed.
+   * Defaults to 24 hours.
+   */
+  maxTaskRunningSeconds?: number
 }>
 
 export type TasksConfig = Readonly<{
   [TasksNamespace.Core]?: CoreTasksConfig
-  [TasksNamespace.Backend]?: {
-    /**
-     * If true, no task will ever be enqueued. It will always be executed immediately.
-     * This is useful for development / local execution.
-     */
-    executeNow?: boolean
-    queue?: TaskQueueConfig
-    bullMq?: BullMqTaskQueueConfig
-    callbacks?: CallbackConfig
-  }
+  [TasksNamespace.Backend]?: BackendTasksConfig
   [TasksNamespace.Memory]?: MemoryTasksConfig
 }>
 

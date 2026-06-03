@@ -1,5 +1,6 @@
 import { assert } from 'chai'
 import * as sinon from 'sinon'
+import { defaultTaskTtlSeconds } from '../../../src/types.js'
 import { createTaskTtlLazyLoadMethod } from '../../../src/core/internal-libs.js'
 
 describe('/src/core/internal-libs.ts', () => {
@@ -35,7 +36,10 @@ describe('/src/core/internal-libs.ts', () => {
       assert.equal(actual, expected)
     })
 
-    it('should leave ttl undefined when core config is missing', () => {
+    it('should compute ttl from the 90 day default when core config is missing', () => {
+      const clock = sinon.useFakeTimers({
+        now: new Date('2026-06-03T12:00:00.000Z').getTime(),
+      })
       const input = {
         coreConfig: undefined,
         value: undefined as number | undefined,
@@ -44,11 +48,18 @@ describe('/src/core/internal-libs.ts', () => {
         coreConfig: input.coreConfig,
       })
       const actual = lazyLoadMethod(input.value)
-      const expected = undefined
+      const expected = Math.floor(
+        new Date('2026-06-03T12:00:00.000Z').getTime() / 1000 +
+          defaultTaskTtlSeconds
+      )
       assert.equal(actual, expected)
+      clock.restore()
     })
 
-    it('should leave ttl undefined when defaultTtl is not configured', () => {
+    it('should compute ttl from the 90 day default when defaultTtl is not configured', () => {
+      const clock = sinon.useFakeTimers({
+        now: new Date('2026-06-03T12:00:00.000Z').getTime(),
+      })
       const input = {
         coreConfig: {},
         value: undefined as number | undefined,
@@ -57,11 +68,15 @@ describe('/src/core/internal-libs.ts', () => {
         coreConfig: input.coreConfig,
       })
       const actual = lazyLoadMethod(input.value)
-      const expected = undefined
+      const expected = Math.floor(
+        new Date('2026-06-03T12:00:00.000Z').getTime() / 1000 +
+          defaultTaskTtlSeconds
+      )
       assert.equal(actual, expected)
+      clock.restore()
     })
 
-    it('should compute ttl from defaultTtl seconds when value is undefined', () => {
+    it('should compute ttl from configured defaultTtl seconds when value is undefined', () => {
       const clock = sinon.useFakeTimers({
         now: new Date('2026-06-03T12:00:00.000Z').getTime(),
       })

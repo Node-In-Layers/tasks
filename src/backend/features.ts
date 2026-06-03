@@ -7,9 +7,18 @@ import {
   LogLevelNames,
   isErrorObject,
   NilAnnotatedFunction,
+  annotatedFunction,
+  jsonObjSchema,
 } from '@node-in-layers/core'
 import { asyncMap } from 'modern-async'
-import { JsonObj, queryBuilder, PrimaryKeyType } from 'functional-models'
+import {
+  JsonObj,
+  queryBuilder,
+  PrimaryKeyType,
+  DatastoreValueType,
+  EqualitySymbol,
+} from 'functional-models'
+import { z } from 'zod'
 import {
   stripTaskControlProps,
   createTaskFeature as createTaskFeatureContract,
@@ -23,7 +32,14 @@ import {
   TaskExecutionResponse,
   TaskControlProp,
 } from '../core/types.js'
-import { TasksNamespace, NoneType, ConfigWithTasks } from '../types.js'
+import {
+  TasksNamespace,
+  NoneType,
+  ConfigWithTasks,
+  defaultCleanupBatchSize,
+  defaultMaxTaskRunningSeconds,
+} from '../types.js'
+import { createTTL } from '../core/libs.js'
 import { normalizeCreateTaskFeatureArgs } from './internal-libs.js'
 import {
   CreateTaskProps,
@@ -32,9 +48,12 @@ import {
   QueueService,
   CreateTaskFeatureMethod,
   StartTaskPollingFeatureProps,
+  CleanUpTasksResponse,
 } from './types.js'
 import { continueUntil } from './utils.js'
 import { createTaskCrossLayerProps } from './libs.js'
+
+const SECONDS_TO_MILLISECONDS = 1000
 
 type TaskRunnerMethod = LayerFunction<
   (
@@ -597,12 +616,102 @@ const create = (
     )
   }
 
+  const cleanUpTasks = annotatedFunction(
+    {
+      functionName: 'cleanUpTasks',
+      domain: TasksNamespace.Backend,
+      description:
+        'Deletes expired tasks and marks long-running tasks as failed, then enqueues matching callbacks.',
+      args: jsonObjSchema,
+      returns: z.object({
+        deletedCount: z.number().int(),
+        cancelledCount: z.number().int(),
+      }),
+    },
+    async (
+      _args,
+      crossLayerProps?: CrossLayerProps
+    ): Promise<CleanUpTasksResponse> => {
+      const Tasks = context.services[TasksNamespace.Core].cruds.Tasks
+      const backendConfig = context.config[TasksNamespace.Backend]
+      const batchSize =
+        backendConfig?.cleanupBatchSize ?? defaultCleanupBatchSize
+      const maxTaskRunningSeconds =
+        backendConfig?.maxTaskRunningSeconds ?? defaultMaxTaskRunningSeconds
+      const nowTtl = createTTL({ datetime: new Date() })
+      const startedBefore = new Date(Date.now() - maxTaskRunningSeconds * SECONDS_TO_MILLISECONDS)
+
+      const deleteNextBatch = async (deletedSoFar: number): Promise<number> => {
+        const result = await Tasks.search(
+          queryBuilder()
+            .property('ttl', nowTtl, {
+              type: DatastoreValueType.number,
+              equalitySymbol: EqualitySymbol.lte,
+            })
+            .take(batchSize)
+            .compile()
+        )
+        const primaryKeys = result.instances.map(instance =>
+          instance.getPrimaryKey()
+        )
+        if (!primaryKeys.length) {
+          return deletedSoFar
+        }
+        await Tasks.bulkDelete(primaryKeys)
+        return deleteNextBatch(deletedSoFar + primaryKeys.length)
+      }
+
+      const cancelNextBatch = async (
+        cancelledSoFar: number
+      ): Promise<number> => {
+        const result = await Tasks.search(
+          queryBuilder()
+            .property('status', TaskStatus.Running)
+            .and()
+            .datesBefore('startedAt', startedBefore, {
+              equalToAndBefore: true,
+            })
+            .take(batchSize)
+            .compile()
+        )
+        if (!result.instances.length) {
+          return cancelledSoFar
+        }
+
+        await asyncMap(result.instances, async instance => {
+          const task = await instance.toObj<Task>()
+          const error = createErrorObject(
+            'TASK_MAX_RUNNING_TIME_EXCEEDED',
+            'Cancelled',
+            `The task ran beyond the maximum running time of ${maxTaskRunningSeconds} seconds.`
+          )
+          const updatedTask = await Tasks.update(task.id, {
+            ...task,
+            status: TaskStatus.Failed,
+            completedAt: new Date().toISOString(),
+            result: {
+              error: error.error,
+            },
+          }).then(x => x.toObj<Task>())
+          await _spawnCallbackTasks(updatedTask, crossLayerProps)
+        })
+
+        return cancelNextBatch(cancelledSoFar + result.instances.length)
+      }
+
+      const deletedCount = await deleteNextBatch(0)
+      const cancelledCount = await cancelNextBatch(0)
+      return { deletedCount, cancelledCount }
+    }
+  )
+
   return {
     createTaskFeature,
     registerTaskCallback,
     startTaskPolling,
     awaitTask,
     executeTaskAndWait,
+    cleanUpTasks,
   }
 }
 

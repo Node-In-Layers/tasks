@@ -321,6 +321,13 @@ export type StartTaskPollingFeatureProps = Readonly<{
   abortSignal?: AbortSignal
 }>
 
+export type CleanUpTasksResponse = Readonly<{
+  deletedCount: number
+  cancelledCount: number
+}>
+
+export type CleanUpTasksProps = Readonly<JsonObj>
+
 /**
  * Public task API on the backend namespace. All `LayerFunction` members accept trailing `crossLayerProps`
  * for tracing; pass them through on every nested service call.
@@ -377,6 +384,10 @@ export type TasksFeatures = Readonly<{
      */
     crossLayerProps?: CrossLayerProps
   ) => Promise<Response<TResult>>
+  /**
+   * Deletes expired tasks and marks long-running tasks as failed, then enqueues matching callbacks.
+   */
+  cleanUpTasks: NilAnnotatedFunction<CleanUpTasksProps, CleanUpTasksResponse>
 }>
 
 /**

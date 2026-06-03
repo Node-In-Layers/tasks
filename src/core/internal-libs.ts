@@ -5,7 +5,7 @@ import {
   annotatedFunction,
 } from '@node-in-layers/core'
 import { JsonObj, PrimaryKeyType } from 'functional-models'
-import { CoreTasksConfig } from '../types.js'
+import { CoreTasksConfig, defaultTaskTtlSeconds } from '../types.js'
 import {
   taskAnnotationFunctionProps,
   TaskControlProp,
@@ -16,13 +16,19 @@ import { createTTL } from './libs.js'
 
 const millisecondsPerSecond = 1000
 
+const resolveDefaultTtlSeconds = (
+  coreConfig: CoreTasksConfig | undefined
+): number | undefined => {
+  if (coreConfig?.noTTL === true) {
+    return undefined
+  }
+  return coreConfig?.defaultTtl ?? defaultTaskTtlSeconds
+}
+
 const shouldUseTaskTtl = (
   args: Readonly<{ coreConfig: CoreTasksConfig | undefined }>
 ): boolean => {
-  if (args.coreConfig?.noTTL === true) {
-    return false
-  }
-  return args.coreConfig?.defaultTtl !== undefined
+  return resolveDefaultTtlSeconds(args.coreConfig) !== undefined
 }
 
 const createTaskTtlFromSecondsFromNow = (
@@ -45,7 +51,7 @@ export const createTaskTtlLazyLoadMethod = (
     if (!shouldUseTaskTtl({ coreConfig: args.coreConfig })) {
       return value
     }
-    const defaultTtlSeconds = args.coreConfig?.defaultTtl
+    const defaultTtlSeconds = resolveDefaultTtlSeconds(args.coreConfig)
     if (defaultTtlSeconds === undefined) {
       return value
     }
