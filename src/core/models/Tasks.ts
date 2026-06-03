@@ -5,6 +5,7 @@ import {
   ObjectProperty,
   JsonAble,
   LastModifiedDateProperty,
+  IntegerProperty,
 } from 'functional-models'
 import { TasksNamespace, ConfigWithTasks } from '../../types.js'
 import {
@@ -14,13 +15,16 @@ import {
   TaskRetryConfig,
   TaskResult,
 } from '../types.js'
+import { createTaskTtlLazyLoadMethod } from '../internal-libs.js'
 
 export const create = ({
+  context,
   Model,
   getModel,
   getPrimaryKeyProperty,
   getForeignKeyProperty,
 }: ModelProps<ConfigWithTasks>) => {
+  const coreConfig = context.config[TasksNamespace.Core]
   const idProperty = getPrimaryKeyProperty(TasksNamespace.Core, 'Tasks')
   const rootTaskIdProperty = getForeignKeyProperty(
     TasksNamespace.Core,
@@ -62,6 +66,12 @@ export const create = ({
       completedAt: DatetimeProperty(),
       executionNode: TextProperty(),
       retryConfig: ObjectProperty<TaskRetryConfig>(),
+      ttl: IntegerProperty({
+        description:
+          'Optional Unix timestamp (seconds) for automatic database roll-out.',
+        lazyLoadMethod: createTaskTtlLazyLoadMethod({ coreConfig }),
+        minValue: 0,
+      }),
       userId: TextProperty(),
       createdAt: DatetimeProperty(),
       updatedAt: LastModifiedDateProperty(),

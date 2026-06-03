@@ -137,6 +137,7 @@ const create = (
         crossLayerProps: props.crossLayerProps,
         scheduledAt: props.scheduledAt?.toISOString(),
         retryConfig: props.retryConfig,
+        ...(props.ttl !== undefined ? { ttl: props.ttl } : {}),
         userId: props.userId,
       }).then(x => x.toObj<Task>())
 

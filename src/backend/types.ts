@@ -86,6 +86,11 @@ export type CreateTaskProps<
    * come from config `bullMq.jobOptions` in the queue service).
    */
   retryConfig?: TaskRetryConfig
+  /**
+   * Optional Unix timestamp (seconds) for automatic database roll-out. When omitted, the Tasks
+   * model applies `config[TasksNamespace.Core].defaultTtl` seconds from now unless `noTTL` is true.
+   */
+  ttl?: number
   /** Copied onto the row and onto callback-spawned tasks so downstream work keeps the same actor. */
   userId?: string
   /**

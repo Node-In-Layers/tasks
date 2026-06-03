@@ -5,12 +5,55 @@ import {
   annotatedFunction,
 } from '@node-in-layers/core'
 import { JsonObj, PrimaryKeyType } from 'functional-models'
+import { CoreTasksConfig } from '../types.js'
 import {
   taskAnnotationFunctionProps,
   TaskControlProp,
   TaskFeatureProps,
   TaskFeatureWrapperImplementation,
 } from './types.js'
+import { createTTL } from './libs.js'
+
+const millisecondsPerSecond = 1000
+
+const shouldUseTaskTtl = (
+  args: Readonly<{ coreConfig: CoreTasksConfig | undefined }>
+): boolean => {
+  if (args.coreConfig?.noTTL === true) {
+    return false
+  }
+  return args.coreConfig?.defaultTtl !== undefined
+}
+
+const createTaskTtlFromSecondsFromNow = (
+  args: Readonly<{ secondsFromNow: number }>
+): number => {
+  return createTTL({
+    datetime: new Date(
+      Date.now() + args.secondsFromNow * millisecondsPerSecond
+    ),
+  })
+}
+
+export const createTaskTtlLazyLoadMethod = (
+  args: Readonly<{ coreConfig: CoreTasksConfig | undefined }>
+) => {
+  return (value: number | undefined): number | undefined => {
+    if (value !== undefined && value !== null) {
+      return value
+    }
+    if (!shouldUseTaskTtl({ coreConfig: args.coreConfig })) {
+      return value
+    }
+    const defaultTtlSeconds = args.coreConfig?.defaultTtl
+    if (defaultTtlSeconds === undefined) {
+      return value
+    }
+    return createTaskTtlFromSecondsFromNow({
+      secondsFromNow: defaultTtlSeconds,
+    })
+  }
+}
 
 export const stripTaskControlProps = <TProps extends JsonObj>(
   props: TaskFeatureProps<TProps>

@@ -79,7 +79,20 @@ export type MemoryTasksConfig = Readonly<{
   queue?: MemoryQueueConfig
 }>
 
+export type CoreTasksConfig = Readonly<{
+  /**
+   * Default TTL offset in seconds from task creation time. Applied when `noTTL` is not true
+   * and the task record has no explicit `ttl`. Stored on the task as a Unix timestamp (seconds).
+   */
+  defaultTtl?: number
+  /**
+   * When true, task records are created without a TTL even when `defaultTtl` is set.
+   */
+  noTTL?: boolean
+}>
+
 export type TasksConfig = Readonly<{
+  [TasksNamespace.Core]?: CoreTasksConfig
   [TasksNamespace.Backend]?: {
     /**
      * If true, no task will ever be enqueued. It will always be executed immediately.

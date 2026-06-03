@@ -140,6 +140,10 @@ export type Task<
   completedAt?: string
   executionNode?: string
   retryConfig?: TaskRetryConfig
+  /**
+   * Optional Unix timestamp (seconds) used for automatic database roll-out.
+   */
+  ttl?: number
   userId?: string
   createdAt?: string
   updatedAt?: string
