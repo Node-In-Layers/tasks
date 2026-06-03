@@ -89,6 +89,10 @@ export type CoreTasksConfig = Readonly<{
    * When true, task records are created without a TTL even when `defaultTtl` is set.
    */
   noTTL?: boolean
+  /**
+   * Maximum number of expired task records to fetch and delete per search batch in `cleanUpTasks`.
+   */
+  cleanupBatchSize?: number
 }>
 
 export type TasksConfig = Readonly<{

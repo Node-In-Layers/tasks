@@ -3,6 +3,7 @@ import {
   CrossLayerProps,
   LayerFunction,
   ModelCrudsFunctions,
+  NilAnnotatedFunction,
   Response,
   jsonAbleSchema,
 } from '@node-in-layers/core'
@@ -172,6 +173,12 @@ export type CoreCruds = Readonly<{
   TaskCallbackMappings: ModelCrudsFunctions<TaskCallbackMapping>
 }>
 
+export type CleanUpTasksResponse = Readonly<{
+  deletedCount: number
+}>
+
+export type CleanUpTasksProps = Readonly<JsonObj>
+
 export type CoreServices = Readonly<object>
 
 export type CoreServicesLayer = Readonly<{
@@ -180,7 +187,17 @@ export type CoreServicesLayer = Readonly<{
   }
 }>
 
-export type CoreFeatures = Readonly<object>
+/**
+ * Core features
+ * @interface
+ */
+export type CoreFeatures = Readonly<{
+  /**
+   * Deletes expired tasks from the database.
+   * @function
+   */
+  cleanUpTasks: NilAnnotatedFunction<CleanUpTasksProps, CleanUpTasksResponse>
+}>
 
 export type CoreFeaturesLayer = Readonly<{
   [TasksNamespace.Core]: CoreFeatures & {
